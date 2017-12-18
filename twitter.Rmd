@@ -1,0 +1,132 @@
+---
+title: "Twitter Project on Trader Joe's"
+author: "Yitong Zhang"
+date: "December 16, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(devtools)
+library(twitteR)
+library(wordcloud)
+library(tidytext)
+library(tidyverse)
+library(tm)
+library(stringr)
+library(syuzhet)
+library(ggmap)
+```
+
+
+
+```{r, warning=FALSE}
+#Set up
+api_key<- "DCnaooJkXNICrHNagogBvOkqr"
+api_secret<- "lgUAQkxj6N7Kgj7e0GnZp0AJvN0MDBODiJp3uvAndter9jq9By"
+access_token<- "927641256196526081-q3uJd67zY1Jc5YBIGRrIyroLl4kWQer"
+access_token_secret<- "pPkNuBVInDZqBgLFOOYK9gfL2OT2Shv76qqrlnSgc0HK5"
+
+setup_twitter_oauth(api_key,api_secret,access_token,access_token_secret)
+```
+
+###Twitter Locations in United States
+
+From the US map we can see that most of the twitters are from California and east part of US.
+
+```{r,warning=FALSE}
+
+yo <- searchTwitteR("trader joe's", n = 5000,lang="en", geocode = '37.09,-95.71,1000mi')
+yodf <- twListToDF(yo)
+loc <- -1*is.na(yodf$longitude) + 1
+sum(loc)
+loc1  <- which(loc==1)
+locations <- data.frame(yodf$latitude[loc1], yodf$longitude[loc1])
+locations$yodf.latitude.loc1.<-as.numeric(as.character( locations$yodf.latitude.loc1.))
+locations$yodf.longitude.loc1.<-as.numeric(as.character(locations$yodf.longitude.loc1.))
+names(locations)<-c("lat","lon")
+write.csv(locations,"twitter_us.csv")
+
+map <- ggmap(get_map(location = "United States",  zoom = 4,
+source = "google", maptype = "roadmap")) + 
+  geom_point(aes(x=lon,
+y = lat), data = locations, alpha = 0.5, size = 2,
+color = "red")
+map
+
+```
+
+###Twitter Locations in California
+
+From the map of California we can see that the tweets are concentrated in Los Angeles and San Francisco.
+
+```{r, warning=FALSE,echo=FALSE}
+yo <- searchTwitteR("trader joe's", n = 5000,lang="en", geocode = '34.049933,-118.240843,`50mi')
+yodf <- twListToDF(yo)
+loc <- -1*is.na(yodf$longitude) + 1
+sum(loc)
+loc1  <- which(loc==1)
+locations <- data.frame(yodf$latitude[loc1], yodf$longitude[loc1])
+locations$yodf.latitude.loc1.<-as.numeric(as.character( locations$yodf.latitude.loc1.))
+locations$yodf.longitude.loc1.<-as.numeric(as.character(locations$yodf.longitude.loc1.))
+names(locations)<-c("lat","lon")
+write.csv(locations,"twitter_la.csv")
+
+map <- ggmap(get_map(location = "Los Angelas",  zoom = 6,
+source = "google", maptype = "roadmap")) + 
+  geom_point(aes(x=lon,
+y = lat), data = locations, alpha = 0.5, size = 2,
+color = "red")
+map
+```
+
+###Wordcloud
+
+```{r, warning=FALSE}
+tweets <- searchTwitter("trader joe's", n=5000, lang="en")
+tweets.text <- sapply(tweets, function(x) x$getText())
+
+tweets.text<- str_replace_all(tweets.text,"[^[:graph:]]", " ") 
+
+#tweets.text<-tm_map(tweets.test, function(x) iconv(enc2utf8(x), sub = "byte"))
+
+tweets.text <- tolower(tweets.text)
+tweets.text <- gsub("rt", "", tweets.text)
+tweets.text <- gsub("@\\w+", "", tweets.text)
+tweets.text <- gsub("[[:punct:]]", "", tweets.text)
+tweets.text <- gsub("http\\w+", "", tweets.text)
+tweets.text <- gsub("[ |\t]{2,}", "", tweets.text)
+tweets.text <- gsub("^ ", "", tweets.text)
+tweets.text <- gsub(" $", "", tweets.text)
+
+tweets.text.corpus <- Corpus(VectorSource(tweets.text))
+tweets.text.corpus <- tm_map(tweets.text.corpus, function(x)removeWords(x,stopwords()))
+wordcloud(tweets.text.corpus,min.freq = 2, scale=c(7,0.5),colors=brewer.pal(8, "Dark2"),
+          random.color= TRUE, random.order = FALSE, max.words = 150)
+
+```
+
+###Word Frequency Table and Plot
+
+From the word frequency table and the plot we can see that the most frequent words are related to the name of Trader Joe's. Besides, the popular products in Trader Joe's includes wine, cheese and chocolate.
+
+```{r}
+docs<- Corpus(VectorSource(tweets.text))
+docs <- tm_map(docs, function(x)removeWords(x,stopwords()))
+
+dtm <- TermDocumentMatrix(docs)
+
+mat <- as.matrix(dtm)
+
+v <- sort(rowSums(mat), decreasing = TRUE)
+
+d<- data.frame(word= names(v), freq=v)
+d50<-d[1:50,]
+head(d,50)
+
+plot<-ggplot(data=d50)+geom_col(aes(x=word,y=freq))+ggtitle("Word Frequency")
+plot + theme(axis.text.x = element_text(angle = 60, hjust = 1))
+```
+
+
+
